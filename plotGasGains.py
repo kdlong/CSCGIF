@@ -4,12 +4,17 @@ import argparse
 import os
 import glob
 import errno
+import itertools
 
 config_info = {}
 def getComLineArgs():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-f", "--input_folder", required=True,
-            help="Folder containing data files to plot"
+    parser.add_argument("-f", "--files", required=True,
+            type=lambda x : itertools.chain(
+                *[glob.glob(i.strip()) for i in x.split(",")]
+            ),
+            help="List of files of data files to plot, separated "
+            "commas. Unix wildcards will be expanded"
     )
     parser.add_argument("--discard_fits", action='store_true',
             help="Don't store plots for fits to exponential "
@@ -64,6 +69,8 @@ def fitVoltagePoint(voltage, points, output_dir):
     graph.SetMarkerStyle(20)
     offset = points[0][0]
     for j, point in enumerate(points):
+        if point[1] < 0:
+            continue
         graph.SetPoint(j, point[0] - offset, point[1])
         graph.SetPointError(j, 0, point[2])
     function = ROOT.TF1("test","[0]+[1]*exp([2]*x)",
@@ -104,7 +111,7 @@ def getCurve(data_file, output_dir):
         else:
             (value["stable current"], value["stable error"]) = fitVoltagePoint(key, 
                     zip(value["times"], value["currents"], value["errors"]),
-                    "/".join([output_dir, "pAFits"])
+                    "/".join([output_dir, "%s_Fits" % data_file.split("/")[-1].split(".")[0]])
                 )
         # Correction factor, using averages from 
         corr_voltage = key - value["stable current"]*0.000104
@@ -118,15 +125,14 @@ def getCurve(data_file, output_dir):
     total_graph.SetMarkerSize(1)
     return total_graph
 def main():
-    data_path = "/afs/cern.ch/cms/MUON/csc/fast1-test-ISR/IVmeasurements/GasGain"
+    #data_path = "/afs/cern.ch/cms/MUON/csc/fast1-test-ISR/IVmeasurements/"
     final_canvas = ROOT.TCanvas("final", "final")
     args = getComLineArgs()
-    colors = [ROOT.kRed, ROOT.kBlue, ROOT.kBlack, ROOT.kGreen]
+    colors = [ROOT.kRed, ROOT.kBlue, ROOT.kBlack, ROOT.kGreen, ROOT.kGray, ROOT.kAzure]
     graphs = []
-    output_dir = "/".join([args.output_folder,
-        "GasGain", args.input_folder])
-    makeDirectory(output_dir)
-    for i, data_file in enumerate(glob.glob("/".join([data_path, args.input_folder, "*"]))):
+    makeDirectory(args.output_folder)
+    for i, data_file in enumerate(args.files):
+        print data_file
         graphs.append(getCurve(data_file, args.output_folder))
     ymax = 1.3*max([x.GetMaximum() for x in graphs])
     xmax = max([x.GetXaxis().GetXmax() for x in graphs])
@@ -142,7 +148,7 @@ def main():
             graph.Draw("Psames")
     if args.logy:
         final_canvas.SetLogy()
-    final_canvas.Print("/".join([output_dir, "final.pdf"]))
+    final_canvas.Print("/".join([args.output_folder, "final.pdf"]))
 
 if __name__ == "__main__":
         main()
