@@ -68,6 +68,31 @@ class IVCurve(object):
             canvas.Print("%s/v%s.pdf" % (output_dir, int(voltage)))
         entry["stable current"] = function.GetParameter(0)
         entry["stable error"] = function.GetParError(0)
+    # HV corrections due to voltage drop on HV resistors,
+    # Calculated and presented by Andrey Korytov.
+    #
+    # For ME1/1:
+    # section B (0.3 m^2, 73%): dV = 0.192Itot [uA]
+    # section A (0.11 m^2, 27%): dV = 0.072Itot [uA]
+    #
+    # weighted average (inversely to areas):
+    # dHV = 0.192*0.73 + 0.072*0.27 = 0.1596 uA?!?
+    # dHV = 0.192*0.27 + 0.072*0.73 = 0.1044 uA?!?
+    #
+    # For ME2/1:
+    # 0.607I1 [uA] 0.631I2 [uA] 0.647I3 [uA]
+    # Areas: HV1: 0.45 m^2 (27.1%)
+    # Areas: HV2: 0.54 m^2 (32.5%)
+    # Areas: HV3: 0.67 m^2 (40.4%)
+    #
+    # Weighted average:
+    # dHV = 0.607*0.271 + 0.631*0.325 + 0.67*0.404
+    # dHV = 0.6403 uA
+    def getCorrectedVoltage(self, voltage, current, chamber):
+        corr_factors = {"ME11" : 0.0001044,
+                "ME21" : 0.0006403
+        }
+        return voltage - current*corr_factors[chamber]
     def getCurve(self, output_dir):
         self.final_curve = ROOT.TGraphErrors(len(self.entries))
         voltages = self.entries.keys()
@@ -85,17 +110,19 @@ class IVCurve(object):
                 self.fitVoltagePoint(key, "/".join([output_dir, 
                     "%s_Fits" % self.data_file.split("/")[-1].split(".")[0]])
                 )
-            # Correction factor, using averages from 
-            corr_voltage = key - value["stable current"]*0.000104
-            self.final_curve.SetPoint(i, key, value["stable current"])
+            corr_voltage = self.getCorrectedVoltage(key, value["stable current"], 
+                "ME11" if "ME11" in name else "ME21")
+            self.final_curve.SetPoint(i, corr_voltage, value["stable current"])
             self.final_curve.SetPointError(i, 0, value["stable error"]) 
         if "FIT_FUNCTION" in self.config_info.keys():
+            print self.config_info["FIT_FUNCTION"]
             extrema = [float(x) for x in self.config_info["FIT_RANGE"]] \
                 if "FIT_RANGE" in self.config_info else [voltages[0], voltages[1]]
             self.fit_func = ROOT.TF1("-".join([name, "fit"]),
                 self.config_info["FIT_FUNCTION"],
                 extrema[0], extrema[1]
             )
+            print "function is %s" % self.config_info["FIT_FUNCTION"]
             self.fit_func.SetParameter(0,1)
             self.fit_func.SetParameter(1,0.005)
             self.final_curve.Fit(self.fit_func, "SR")
@@ -123,7 +150,7 @@ class IVCurve(object):
         if "EVALUATE_FIT_AT" in self.config_info:
             curr_point = float(self.config_info["EVALUATE_FIT_AT"])
             result = self.fit_func.Eval(curr_point)
-            fit_text.AddText("I(%i) = %i nA" % (int(curr_point), int(round(result, 0))))
+            fit_text.AddText("I(%i) = %0.2f #muA" % (int(curr_point), round(result/1000, 2)))
         ROOT.SetOwnership(fit_text, False)
         return fit_text
     def setStatCoords(self, x1, y1, x2, y2):
@@ -134,4 +161,5 @@ class IVCurve(object):
         stat_box.SetY1NDC(y1)
         stat_box.SetY2NDC(y2)
     def getStatBox(self):
+        #print self.final_curve.GetListOfFunctions().FindObject("stats")
         return self.final_curve.GetListOfFunctions().FindObject("stats")

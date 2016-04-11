@@ -11,12 +11,13 @@ from IPython import embed
 config_info = {}
 def getComLineArgs():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-f", "--files", required=True,
-            type=lambda x : itertools.chain(
-                *[glob.glob(i.strip()) for i in x.split(",")]
-            ),
-            help="List of files of data files to plot, separated "
+    parser.add_argument("-f", "--files", required=True, 
+            type=lambda x: [i.strip() for i in x.split(",")],
+            help="List of files of data files to plot, separated by"
             "commas. Unix wildcards will be expanded"
+    )
+    parser.add_argument("-p", "--data_path", type=str,
+        default="", help="Append this path to data files"
     )
     parser.add_argument("--discard_fits", action='store_true',
             help="Don't store plots for fits to exponential "
@@ -47,6 +48,13 @@ def getComLineArgs():
             help="Scale legend entries (nominal size 0.06)"
     )
     return parser.parse_args()
+def getFileList(files, data_path):
+    file_path = lambda x: x if os.path.exists(x.split("/")[0]) \
+        else "/".join([data_path.rstrip("/"), x])
+    file_list = itertools.chain(
+        *[glob.glob(file_path(i)) for i in files]
+    )
+    return file_list
 def getPrettyLegend(graphs, entry_size, right):
     offset = ROOT.gPad.GetRightMargin() - 0.04
     xcoords = [.15, .5] if not right else [.55-offset, .90-offset]
@@ -67,7 +75,8 @@ def main():
     OutputTools.makeDirectory(args.output_folder)
     curves = []
     graphs = []
-    for i, data_file in enumerate(args.files):
+    files = getFileList(args.files, args.data_path)
+    for i, data_file in enumerate(files):
         curve = IVCurve.IVCurve(data_file)
         curves.append(curve)
         graphs.append(curve.getCurve(args.output_folder))
