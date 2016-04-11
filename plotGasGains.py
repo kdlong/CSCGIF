@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 import ROOT
 import errno
-from Utilities import OutputTools, InputTools, IVCurve
+from Utilities import OutputTools, InputTools
+from DataTools import IVCurve, IVData
 from IPython import embed
 
 config_info = {}
@@ -59,9 +60,19 @@ def main():
     OutputTools.makeDirectory(args.output_folder)
     curves = []
     graphs = []
-    files = InputTools.getFileList(args.files, args.data_path)
-    for i, data_file in enumerate(files):
-        curve = IVCurve.IVCurve(data_file)
+    
+    for data_file in InputTools.getFileList(args.files, args.data_path):
+        curve = IVCurve.IVCurve(IVData.IVData(data_file))
+        curves.append(curve)
+        graphs.append(curve.getCurve(args.output_folder))
+    if args.subtract_files != []:
+        subtract_files = InputTools.getFileList(args.subtract_files, args.data_path)
+        filedata = IVData.IVData(next(subtract_files))
+        filedata.loadRawData()
+        subtract_data = IVData.IVData(next(subtract_files))
+        subtract_data.loadRawData()
+        filedata.subtractData(subtract_data)
+        curve = IVCurve.IVCurve(filedata)
         curves.append(curve)
         graphs.append(curve.getCurve(args.output_folder))
     ymax = max([x.GetMaximum() for x in graphs])
@@ -88,7 +99,6 @@ def main():
     if args.logy:
         final_canvas.SetLogy()
     legend = getPrettyLegend(graphs, 0.06*args.scaleleg, args.legend_right)
-    #embed()
     legend.Draw()
     final_canvas.Print("/".join([args.output_folder, "final.pdf"]))
     if args.saveroot:
