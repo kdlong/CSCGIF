@@ -1,30 +1,21 @@
 #!/usr/bin/env python
 import ROOT
-import argparse
-import os
-import glob
 import errno
-import itertools
-from Utilities import OutputTools, IVCurve
+from Utilities import OutputTools, InputTools, IVCurve
 from IPython import embed
 
 config_info = {}
 def getComLineArgs():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-f", "--files", required=True, 
-            type=lambda x: [i.strip() for i in x.split(",")],
-            help="List of files of data files to plot, separated by"
-            "commas. Unix wildcards will be expanded"
-    )
-    parser.add_argument("-p", "--data_path", type=str,
-        default="", help="Append this path to data files"
-    )
+    parser = InputTools.getDefaultParser()
     parser.add_argument("--discard_fits", action='store_true',
             help="Don't store plots for fits to exponential "
                 "fits (for pA points)"
     )
     parser.add_argument("--logy", action='store_true',
             help="Use log scale for y-axis"
+    )
+    parser.add_argument("--saveroot", action='store_true',
+            help="Save canvas to root file"
     )
     parser.add_argument("--legend_right", action='store_true',
             help="Position legend to the right"
@@ -48,13 +39,6 @@ def getComLineArgs():
             help="Scale legend entries (nominal size 0.06)"
     )
     return parser.parse_args()
-def getFileList(files, data_path):
-    file_path = lambda x: x if os.path.exists(x.split("/")[0]) \
-        else "/".join([data_path.rstrip("/"), x])
-    file_list = itertools.chain(
-        *[glob.glob(file_path(i)) for i in files]
-    )
-    return file_list
 def getPrettyLegend(graphs, entry_size, right):
     offset = ROOT.gPad.GetRightMargin() - 0.04
     xcoords = [.15, .5] if not right else [.55-offset, .90-offset]
@@ -75,7 +59,7 @@ def main():
     OutputTools.makeDirectory(args.output_folder)
     curves = []
     graphs = []
-    files = getFileList(args.files, args.data_path)
+    files = InputTools.getFileList(args.files, args.data_path)
     for i, data_file in enumerate(files):
         curve = IVCurve.IVCurve(data_file)
         curves.append(curve)
@@ -107,6 +91,8 @@ def main():
     #embed()
     legend.Draw()
     final_canvas.Print("/".join([args.output_folder, "final.pdf"]))
+    if args.saveroot:
+        final_canvas.Print("/".join([args.output_folder, "final.root"]))
 
 if __name__ == "__main__":
         main()

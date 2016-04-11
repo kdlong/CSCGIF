@@ -122,7 +122,6 @@ class IVCurve(object):
                 self.config_info["FIT_FUNCTION"],
                 extrema[0], extrema[1]
             )
-            print "function is %s" % self.config_info["FIT_FUNCTION"]
             self.fit_func.SetParameter(0,1)
             self.fit_func.SetParameter(1,0.005)
             self.final_curve.Fit(self.fit_func, "SR")
