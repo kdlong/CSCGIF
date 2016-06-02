@@ -4,6 +4,8 @@ import errno
 from Utilities import OutputTools, InputTools
 from DataTools import IVCurve, IVData
 from IPython import embed
+import sys
+import datetime
 
 config_info = {}
 def getComLineArgs():
@@ -55,16 +57,24 @@ def main():
     final_canvas = ROOT.TCanvas("final", "final")
     ROOT.gStyle.SetOptStat(1)
     args = getComLineArgs()
-    colors = [ROOT.kRed, ROOT.kBlue, ROOT.kBlack, ROOT.kGreen, ROOT.kGray, ROOT.kCyan,
-                ROOT.kYellow, ROOT.kGreen + 4, ROOT.kOrange, ROOT.kPink]
     OutputTools.makeDirectory(args.output_folder)
     curves = []
     graphs = []
+    with open("/".join([args.output_folder, "meta_info.log"]), "w") as log:
+        log.write('-'*80 + '\n' + 
+            'Script completed at %s\n' % datetime.datetime.now() +
+            'The command was: %s\n' % ' '.join(sys.argv) +
+            '-'*80 + '\n'
+        )
+        log.write("Voltage (V) Current (nA)")
     
-    for data_file in InputTools.getFileList(args.files, args.data_path):
-        curve = IVCurve.IVCurve(IVData.IVData(data_file))
-        curves.append(curve)
-        graphs.append(curve.getCurve(args.output_folder))
+        for data_file in InputTools.getFileList(args.files, args.data_path):
+            data = IVData.IVData(data_file)
+            curve = IVCurve.IVCurve(data)
+            curves.append(curve)
+            graphs.append(curve.getCurve(args.output_folder))
+            for point in data.getRawData(""):
+                log.write("\n%s %s %s" % point)
     if args.subtract_files != []:
         subtract_files = InputTools.getFileList(args.subtract_files, args.data_path)
         filedata = IVData.IVData(next(subtract_files))
@@ -74,7 +84,12 @@ def main():
         filedata.subtractData(subtract_data)
         curve = IVCurve.IVCurve(filedata)
         curves.append(curve)
-        graphs.append(curve.getCurve(args.output_folder))
+        graph = curve.getCurve(args.output_folder)
+        graph.SetLineColor(ROOT.kGray)
+        graph.SetMarkerColor(ROOT.kGray)
+        graph.SetLineColor(ROOT.kGray+2)
+        graph.SetMarkerColor(ROOT.kGray+2)
+        graphs.append(graph)
     ymax = max([x.GetMaximum() for x in graphs])
     xmax = args.xmax if args.xmax > 0 else max([x.GetXaxis().GetXmax() for x in graphs])
     for i, (graph, curve) in enumerate(zip(graphs, curves)):
@@ -85,7 +100,6 @@ def main():
             graph.Draw("AP")
         else:
             graph.Draw("Psames")
-        graph.SetMarkerColor(colors[i])
         stat_box = curve.getStatBox()
         if stat_box:
             stat_box.SetX1NDC(0.7)
@@ -103,6 +117,7 @@ def main():
     final_canvas.Print("/".join([args.output_folder, "final.pdf"]))
     if args.saveroot:
         final_canvas.Print("/".join([args.output_folder, "final.root"]))
+
 
 if __name__ == "__main__":
         main()

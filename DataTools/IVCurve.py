@@ -1,6 +1,7 @@
 import ROOT
 import os
 from Utilities import OutputTools
+import Utilities.config_attributes as attributes
 from IPython import embed
 
 class IVCurve(object):
@@ -43,6 +44,11 @@ class IVCurve(object):
             for v in self.data.getEntries().values()]))
         self.final_curve.SetMarkerStyle(20)
         self.final_curve.SetMarkerSize(1)
+        if "COLOR" in self.config_info:
+            attributes.setAttributes(self.final_curve, 
+                {"SetLineColor" : self.config_info["COLOR"],
+                "SetMarkerColor" : self.config_info["COLOR"]}
+            )
         ROOT.SetOwnership(self.final_curve, False)
         return self.final_curve
     def getFitText(self):

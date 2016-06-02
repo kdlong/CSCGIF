@@ -90,23 +90,22 @@ class IVData(object):
     # dHV = 0.192*0.27 + 0.072*0.73 = 0.1044 uA?!?
     #
     # For ME2/1:
-    # 0.607I1 [uA] 0.631I2 [uA] 0.647I3 [uA]
-    # Areas: HV1: 0.45 m^2 (27.1%)
-    # Areas: HV2: 0.54 m^2 (32.5%)
-    # Areas: HV3: 0.67 m^2 (40.4%)
+    # Correcitons depend on section,
+    # I_{1}, I{2}, I{3} correspond to section 1, 2, 3
+    # 0.607*I1 [uA] 0.631*I2 [uA] 0.647*I3 [uA]
     #
-    # Weighted average:
-    # dHV = 0.607*0.271 + 0.631*0.325 + 0.67*0.404
-    # dHV = 0.6403 uA
+    def getCorrectedVoltage(self, voltage, current):
+        chamber = [x for x in self.name.split("_") if "ME" in x][0]
+        corr_factors = {"ME11" : 0.0001044,
+                "ME21s1" : 0.000607,
+                "ME21s2" : 0.000631,
+                "ME21s3" : 0.000647
+        }
+        return voltage - current*corr_factors[chamber]
     def getVoltages(self):
         voltages = self.entries.keys()
         voltages.sort()
         return voltages
-    def getCorrectedVoltage(self, voltage, current, chamber):
-        corr_factors = {"ME11" : 0.0001044,
-                "ME21" : 0.0006403
-        }
-        return voltage - current*corr_factors[chamber]
     def getEntries(self):
         return self.entries
     def loadRawData(self, output_dir=""):
@@ -120,8 +119,7 @@ class IVData(object):
                     "%s_Fits" % self.data_file.split("/")[-1].split(".")[0]]) if \
                         output_dir != "" else ""
                 )
-            corr_voltage = self.getCorrectedVoltage(key, value["stable current"], 
-                "ME11" if "ME11" in self.data_file else "ME21")
+            corr_voltage = self.getCorrectedVoltage(key, value["stable current"])
             self.data.append((corr_voltage, value["stable current"], value["stable error"]))
     def getRawData(self, output_dir):
         if not hasattr(self, "data"):
@@ -129,8 +127,6 @@ class IVData(object):
         return self.data
     def subtractData(self, ivdata):
         temp_entries = {}
-        self.name = "ME11-L1 Gain - Dark Cur."
-        del self.config_info["NAME"]
         for key, value in ivdata.getEntries().iteritems():
             if key in self.entries:
                 temp_entries.update({key : self.entries[key]})
@@ -143,3 +139,5 @@ class IVData(object):
                 )
         self.entries = temp_entries
         self.loadRawData()
+        self.name = "#splitline{ME11-L2 w/Source - Dark Cur.}{(2016/02/29, 03/24)}"
+        del self.config_info["NAME"]
