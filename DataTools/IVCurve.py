@@ -5,10 +5,11 @@ import Utilities.config_attributes as attributes
 from IPython import embed
 
 class IVCurve(object):
-    def __init__(self, data):
+    def __init__(self, data, norm_factor=1):
         self.data = data
         self.config_info = data.getConfigInfo()
         self.stat_coords = [0, 0, 0.2, 0.2]
+        self.norm_factor = norm_factor
     def getCurve(self, output_dir):
         voltages = self.data.getEntries().keys()
         self.final_curve = ROOT.TGraphErrors(len(voltages))
@@ -18,8 +19,8 @@ class IVCurve(object):
             self.config_info["NAME"]
         )
         for i, point in enumerate(self.data.getRawData(output_dir)):
-            self.final_curve.SetPoint(i, point[0], point[1])
-            self.final_curve.SetPointError(i, 0, point[2]) 
+            self.final_curve.SetPoint(i, point[0], point[1]/self.norm_factor)
+            self.final_curve.SetPointError(i, 0, point[2]/self.norm_factor) 
         if "FIT_FUNCTION" in self.config_info.keys():
             extrema = [float(x) for x in self.config_info["FIT_RANGE"]] \
                 if "FIT_RANGE" in self.config_info else [voltages[0], voltages[1]]
@@ -38,7 +39,8 @@ class IVCurve(object):
                 self.final_curve.GetListOfFunctions().Add(extend)
             ROOT.gROOT.FindObject("final").Update() 
         self.final_curve.GetXaxis().SetTitle("Applied Voltage (V)")
-        self.final_curve.GetYaxis().SetTitle("Current (nA)")
+        self.final_curve.GetYaxis().SetTitle("Current (nA)" 
+            if self.norm_factor == 1 else "Gain")
         self.final_curve.SetMinimum(0.1)
         self.final_curve.SetMaximum(max([v["stable current"] \
             for v in self.data.getEntries().values()]))
@@ -50,6 +52,7 @@ class IVCurve(object):
                 "SetMarkerColor" : self.config_info["COLOR"]}
             )
         ROOT.SetOwnership(self.final_curve, False)
+        ROOT.gStyle.SetOptStat(0)
         return self.final_curve
     def getFitText(self):
         if "FIT_FUNCTION" not in self.config_info.keys():
@@ -60,6 +63,7 @@ class IVCurve(object):
 #                self.stat_coords[2], ymax, "NDCnb")
         fit_text = ROOT.TPaveText(0.60, 0.4, 0.90, 0.4+height, "NDCnb")
         fit_text.SetFillColor(0)
+        fit_text.SetTextFont(42)
         fit_text.SetName(self.final_curve.GetName().replace("final", "fittext"))
         fit_text.AddText("Fit function: %s" % self.config_info["FIT_FUNCTION"])
         if "EVALUATE_FIT_AT" in self.config_info:
@@ -76,5 +80,8 @@ class IVCurve(object):
         stat_box.SetY1NDC(y1)
         stat_box.SetY2NDC(y2)
     def getStatBox(self):
-        #print self.final_curve.GetListOfFunctions().FindObject("stats")
+        stats = self.final_curve.GetListOfFunctions().FindObject("stats")
+        print stats
+        del stats
+        #return self.final_curve.GetListOfFunctions().FindObject("stats")
         return self.final_curve.GetListOfFunctions().FindObject("stats")

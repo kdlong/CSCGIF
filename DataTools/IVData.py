@@ -5,7 +5,7 @@ from Utilities import OutputTools
 
 class IVData(object):
     def __init__(self, data_file_name):
-        self.config_info = {}
+        self.config_info = {"APPLY_VCORRECTIONS" : True }
         self.data_file = data_file_name
         self.entries = self.readDataFromFile(data_file_name)
         self.name = self.data_file.split("/")[-1].split(".")[0]
@@ -28,6 +28,8 @@ class IVData(object):
                 data = line.split()
                 if len(data) < 3:
                     continue
+                elif len(data) == 3 and ":" not in line:
+                    data.insert(1, "0")
                 file_info.append([time(x) for x in data])
             entries = {x : 
                 {"currents" : [],
@@ -119,12 +121,13 @@ class IVData(object):
                     "%s_Fits" % self.data_file.split("/")[-1].split(".")[0]]) if \
                         output_dir != "" else ""
                 )
-            corr_voltage = self.getCorrectedVoltage(key, value["stable current"])
+            corr_voltage = self.getCorrectedVoltage(key, value["stable current"]) if \
+                self.config_info["APPLY_VCORRECTIONS"] in [True, "True", "true"] else key
             self.data.append((corr_voltage, value["stable current"], value["stable error"]))
     def getRawData(self, output_dir):
         if not hasattr(self, "data"):
             self.loadRawData(output_dir)
-        return self.data
+        return sorted(self.data, key=lambda x: x[0])
     def subtractData(self, ivdata):
         temp_entries = {}
         for key, value in ivdata.getEntries().iteritems():

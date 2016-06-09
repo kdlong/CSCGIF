@@ -4,6 +4,7 @@ def makeDirectory(path):
     '''
     Make a directory, don't crash
     '''
+    path = os.path.expanduser(path)
     try:
         os.makedirs(path)
     except OSError as e:
