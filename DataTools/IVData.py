@@ -9,11 +9,13 @@ class IVData(object):
         self.data_file = data_file_name
         self.entries = self.readDataFromFile(data_file_name)
         self.name = self.data_file.split("/")[-1].split(".")[0]
+
     def getName(self):
         return self.name
+
     def readDataFromFile(self, data_file_name):
         file_info = []
-        with open(self.data_file) as data_file:
+        with open(self.data_file, "r") as data_file:
             time = lambda x: float(x) if ":" not in x else \
                 (60*float(x.split(":")[0]) + float(x.split(":")[1]))
             for line in data_file:
@@ -41,32 +43,37 @@ class IVData(object):
                 for x in set([i[0] for i in file_info if len(i) > 0])
             }
         for entry in file_info:
+            print "entry ", entry
             entries[entry[0]]["times"].append(entry[1])
             entries[entry[0]]["currents"].append(entry[2])
             entries[entry[0]]["errors"].append(0 if len(entry) < 4 else entry[3])
         return entries
+
     def getConfigInfo(self):
         return self.config_info
+
     def fitVoltagePoint(self, voltage, output_dir):
         canvas = ROOT.TCanvas("v%i" % int(voltage))
+        ROOT.gStyle.SetOptFit(1)
         if output_dir != "" and not os.path.isdir(output_dir):
             OutputTools.makeDirectory(output_dir)
         entry = self.entries[voltage]
-        graph = ROOT.TGraphErrors(len([x for x in entry["currents"] if x > 0])+1)
+        graph = ROOT.TGraphErrors(len([x for x in entry["currents"] if x > 0]))
         graph.SetName("V=%s" % int(voltage))
         graph.SetMarkerStyle(20)
-        offset = entry["times"][0]
+        offset = entry["times"][0]-1
         for j, point in enumerate(zip(entry["times"], entry["currents"], entry["errors"])):
             if point[1] <= 0:
                 continue
             graph.SetPoint(j, point[0] - offset, point[1])
             graph.SetPointError(j, 0, point[2])
-        function = ROOT.TF1("test","[0]+[1]*exp([2]*x)",
-            0.1, max(entry["times"]) - offset)
+        function = ROOT.TF1("test","[0]+[1]*exp([2]*x)", 0, max(entry["times"]) - offset+1)
         function.SetParameter(0, min([x for x in entry["currents"] if x > 0]))
         function.SetParameter(1, 2)
         function.SetParameter(2, -0.1)
+        print ("HV = %i V")%int(voltage)
         fit = graph.Fit(function, "SR")
+
         if os.path.isdir(output_dir):
             graph.Draw("AP")
             graph.GetXaxis().SetTitle("Time (m)")
@@ -77,9 +84,15 @@ class IVData(object):
             fit_text.AddText("Fit for V_{applied} = %i V" % int(voltage))
             fit_text.AddText("Fit function: [0]+[1]*exp([2]*x)")
             fit_text.Draw()
-            canvas.Print("%s/v%s.pdf" % (output_dir, int(voltage)))
-        entry["stable current"] = function.GetParameter(0)
-        entry["stable error"] = function.GetParError(0)
+            canvas.Print("%s/v%s.png" % (output_dir, int(voltage)))
+
+        fitStatus = ROOT.gMinuit.fCstatu
+        if( ("CONVERGED" in fitStatus) or (''.join(fitStatus.split())=='OK') ):
+            print "ACCEPTED!\n\n"
+            entry["stable current"] = function.GetParameter(0)
+            entry["stable error"] = function.GetParError(0)
+        else:
+            print "REJECTED!\n\n"
     # HV corrections due to voltage drop on HV resistors,
     # Calculated and presented by Andrey Korytov.
     #
@@ -88,8 +101,7 @@ class IVData(object):
     # section A (0.11 m^2, 27%): dV = 0.072Itot [uA]
     #
     # weighted average (inversely to areas):
-    # dHV = 0.192*0.73 + 0.072*0.27 = 0.1596 uA?!?
-    # dHV = 0.192*0.27 + 0.072*0.73 = 0.1044 uA?!?
+    # dHV = 0.192*0.73 + 0.072*0.27 = 0.1596 uA?
     #
     # For ME2/1:
     # Correcitons depend on section,
@@ -98,7 +110,7 @@ class IVData(object):
     #
     def getCorrectedVoltage(self, voltage, current):
         chamber = [x for x in self.name.split("_") if "ME" in x][0]
-        corr_factors = {"ME11" : 0.0001044,
+        corr_factors = {"ME11" : 0.0001596,
                 "ME21s1" : 0.000607,
                 "ME21s2" : 0.000631,
                 "ME21s3" : 0.000647
